@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: payments
+          POSTGRES_USER: payments
+          POSTGRES_PASSWORD: ci-only
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U payments"
+          --health-interval 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+      - name: Tests against PostgreSQL
+        run: mvn -B verify
+        env:
+          DATABASE_URL: jdbc:postgresql://localhost:5432/payments
+          DATABASE_USER: payments
+          DATABASE_PASSWORD: ci-only
+      - name: Build Docker image
+        run: docker build -t payments-ledger-api .
+      - name: Smoke test with Docker Compose
+        run: |
+          docker compose up -d --build
+          for i in $(seq 1 40); do curl -fs http://localhost:8080/actuator/health/readiness && break; sleep 3; done
+          ./scripts/demo.sh
+          docker compose down -v

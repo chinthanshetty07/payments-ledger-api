@@ -1,0 +1,4 @@
+webhooks:
+  scheduler-enabled: false
+  backoff-base-ms: 0
+  max-attempts: 4
